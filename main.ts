@@ -8,17 +8,11 @@ const sleep = (ms: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-interface CourtInfo {
-  name: string;
-  place: string;
-  tel: string;
-}
-
 /**
  * 指定されたURLからウェブページをスクレイピングする
  * @param url スクレイピングするウェブページのURL
  */
-const scrapePage = async (url: string): Promise<CourtInfo[]> => {
+const scrapePage = async (url: string): Promise<string[]> => {
   try {
     console.log(`${url} からデータを取得中...`);
 
@@ -33,18 +27,27 @@ const scrapePage = async (url: string): Promise<CourtInfo[]> => {
       throw new Error("Failed to parse HTML.");
     }
 
-    return Array.from(
-      document.querySelectorAll("tbody tr:not(tr:nth-child(1))"),
-    ).map((tr) => {
-      const name = tr.querySelector("th")!.textContent.replace(
-        /\s+/g,
-        " ",
-      ).trim();
-      const tds = Array.from(tr.querySelectorAll("td")).map((el) => {
-        return el.textContent.trim();
-      });
-      return { name: name, place: tds[0], tel: tds[1] };
-    });
+    const lines: string[] = Array.from(document.getElementsByTagName("a")).map(
+      (atag) => {
+        return atag.innerText.trim() ?? "";
+      },
+    ).filter((s) => {
+      return s.endsWith("裁判所") || s.endsWith("支部");
+    }).filter((s) => {
+      return s.indexOf("内の") == -1 && s.indexOf("/") == -1;
+    }).map((s) => {
+      return s.replace(/支部/g, "支部\n").replace(/出張所/g, "出張所\n")
+        .replace(/・/g, "\n").split("\n")
+        .map((line) => {
+          return line.trim();
+        })
+        .filter((line) => {
+          return 0 < line.trim().length;
+        });
+    }).flat();
+    const uniq = new Set(lines);
+    const alphabetical = [...uniq].sort();
+    return [...alphabetical].sort((a, b) => a.length - b.length);
   } catch (error) {
     throw new Error(`Error in ${url}: ${error}`);
   }
@@ -52,7 +55,7 @@ const scrapePage = async (url: string): Promise<CourtInfo[]> => {
 
 interface ScrapeResult {
   url: string;
-  data: CourtInfo[];
+  data: string[];
 }
 
 /**
@@ -79,7 +82,11 @@ const scrapePages = async (
     }
 
     if (i < urls.length - 1) {
-      console.log(`次のリクエストまで ${delayMs}ms 待機中...`);
+      console.log(
+        `[${String(i + 1).padStart(3)}/${
+          String(urls.length).padStart(3)
+        }] 次のリクエストまで ${delayMs}ms 待機中...`,
+      );
       await sleep(delayMs);
     }
   }
@@ -88,27 +95,19 @@ const scrapePages = async (
 };
 
 /**
- * スクレイピングデータをCSVファイルに書き出す
+ * スクレイピングデータをtxtファイルに書き出す
  * @param data 書き出すデータ
  * @param filename ファイル名
  */
-const saveAsCSV = async (
-  data: CourtInfo[],
+const saveAsFile = async (
+  data: string[],
   filename: string,
 ): Promise<void> => {
   try {
-    const header = "裁判所名,所在地,電話番号\n";
-
-    const csvContent = data.map((court) =>
-      `"${court.name}","${court.place}","${court.tel}"`
-    ).join("\n");
-
-    // ヘッダーとコンテンツを結合
-    const fullContent = header + csvContent;
-
-    await Deno.writeTextFile(filename, fullContent);
+    const content = data.join("\n");
+    await Deno.writeTextFile(filename, content);
   } catch (error) {
-    console.error(`CSVファイルの書き込み中にエラーが発生しました: ${error}`);
+    console.error(`ファイルの書き込み中にエラーが発生しました: ${error}`);
     throw error;
   }
 };
@@ -130,37 +129,49 @@ const getTimestamp = (): string => {
  * @returns ファイル名（拡張子なし）
  */
 const filenameFromURL = (url: string): string => {
-  const parts = url.split("/");
-  const lastPart = parts[parts.length - 1];
-  const basename = lastPart.split(".")[0];
-  return `court_data_${basename}_${getTimestamp()}.csv`;
+  const basename = url.replace("https://www.courts.go.jp/", "").split("/")[0];
+  return `${getTimestamp()}_${basename}.txt`;
+};
+
+const getBaseUrls = async (): Promise<string[]> => {
+  const url = "https://www.courts.go.jp/courthouse/map_tel/index.html";
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const html = await response.text();
+
+  const document = new DOMParser().parseFromString(html, "text/html");
+  if (!document) {
+    throw new Error("Failed to parse HTML.");
+  }
+  const hrefs = Array.from(document.getElementsByTagName("a")).map((atag) => {
+    const href = atag.getAttribute("href");
+    return href;
+  }).filter((href) => {
+    return href !== null;
+  }).filter((href) => {
+    return href.indexOf("syozai/index.html") != -1 ||
+      href.indexOf("ip/info/access/index.html") != -1;
+  }).map((href) => {
+    return href.replace("./../../", "https://www.courts.go.jp/");
+  });
+  return Array.from(new Set(hrefs));
 };
 
 const main = async () => {
-  const urls = [
-    "sapporo.html",
-    "sendai.html",
-    "tokyo.html",
-    "nagoya.html",
-    "osaka.html",
-    "hiroshima.html",
-    "takamatsu.html",
-    "fukuoka.html",
-  ].map((s) => {
-    return `https://www.choutei.jp/courts/courts_family/${s}`;
-  });
-
+  const urls = await getBaseUrls();
   const results = await scrapePages(urls, 3000);
 
   for (const result of results) {
     const filename = filenameFromURL(result.url);
-    await saveAsCSV(result.data, filename);
+    await saveAsFile(result.data, filename);
   }
 
   const allData = results.flatMap((result) => result.data);
   if (0 < allData.length) {
-    const filename = `all_court_data_${getTimestamp()}.csv`;
-    await saveAsCSV(allData, filename);
+    const filename = `all_court_data_${getTimestamp()}.txt`;
+    await saveAsFile(allData, filename);
   }
 };
 
