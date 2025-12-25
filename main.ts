@@ -70,20 +70,31 @@ const scrapePage = async (url: string): Promise<string[]> => {
     }
 
     let candidates: string[] = [];
-    if (
-      url.indexOf("/okayama/about/") != -1 ||
-      url.indexOf("/matsue/about/") != -1
-    ) {
+    if (url.indexOf("/okayama/about/") != -1) {
       candidates = Array.from(document.querySelectorAll("tr > td:nth-child(1)"))
         .map(
           (el) => {
-            return el.innerText.replace(/地図.+$/g, "");
+            return (el.innerText ?? "").trim();
+          },
+        );
+    } else if (url.indexOf("/matsue/about/") != -1) {
+      candidates = Array.from(document.querySelectorAll("tr > td:nth-child(1)"))
+        .map(
+          (el) => {
+            return (el.innerText ?? "").replace(/地図.+$/g, "").trim();
+          },
+        );
+    } else if (url.indexOf("/osaka/")) {
+      candidates = Array.from(document.querySelectorAll("tr > td:nth-child(1)"))
+        .map(
+          (el) => {
+            return (el.innerText ?? "").replace(/\(.+\)/g, "").trim();
           },
         );
     } else {
       candidates = Array.from(document.getElementsByTagName("a")).map(
         (atag) => {
-          return atag.innerText.trim() ?? "";
+          return (atag.innerText ?? "").trim();
         },
       );
     }
