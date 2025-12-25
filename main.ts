@@ -105,6 +105,8 @@ const scrapePage = async (url: string): Promise<string[]> => {
       return splitCourts(s);
     }).flat().map((s) => {
       return s.trim().replace(/[，．･・]|\s/g, "");
+    }).filter((s) => {
+      return 0 < s.length;
     });
     const uniq = new Set(lines);
     const sorted = [...uniq].sort();
