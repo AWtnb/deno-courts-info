@@ -9,6 +9,43 @@ const sleep = (ms: number): Promise<void> => {
 };
 
 /**
+ * 文字列内の裁判所名を抽出し配列として返す
+ *
+ * 「裁判所」という文字列が現れるたびに、そこまでを1つの裁判所名として切り出す
+ * 地方裁判所、家庭裁判所、簡易裁判所などの順序や組み合わせは不問
+ *
+ * @param text - 裁判所名を含む文字列
+ * @returns 抽出された裁判所名の配列
+ *
+ * @example
+ * ```
+ * const result = splitCourts('釧路地方裁判所釧路家庭裁判所釧路簡易裁判所');
+ * // ['釧路地方裁判所', '釧路家庭裁判所', '釧路簡易裁判所']
+ * ```
+ */
+const splitCourts = (text: string): string[] => {
+  const results: string[] = [];
+  let currentIndex = 0;
+
+  while (0 <= currentIndex && currentIndex < text.length) {
+    const nextCourtEnd = text.indexOf("裁判所", currentIndex);
+
+    if (nextCourtEnd === -1) {
+      break;
+    }
+
+    // 「裁判所」を含めた文字列を取得
+    const courtName = text.substring(currentIndex, nextCourtEnd + 3);
+    results.push(courtName);
+
+    // 次の開始位置を設定
+    currentIndex = nextCourtEnd + 3;
+  }
+
+  return results;
+};
+
+/**
  * 指定されたURLからウェブページをスクレイピングする
  * @param url スクレイピングするウェブページのURL
  */
@@ -44,10 +81,12 @@ const scrapePage = async (url: string): Promise<string[]> => {
         .filter((line) => {
           return 0 < line.trim().length;
         });
+    }).flat().map((s) => {
+      return splitCourts(s);
     }).flat();
     const uniq = new Set(lines);
-    const alphabetical = [...uniq].sort();
-    return [...alphabetical].sort((a, b) => a.length - b.length);
+    const sorted = [...uniq].sort();
+    return [...sorted].sort((a, b) => a.length - b.length);
   } catch (error) {
     throw new Error(`Error in ${url}: ${error}`);
   }
@@ -73,6 +112,7 @@ const scrapePages = async (
     const url = urls[i];
     try {
       const result = await scrapePage(url);
+      console.log(result);
       results.push({
         url,
         data: result,
