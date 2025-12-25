@@ -66,21 +66,35 @@ const scrapePage = async (url: string): Promise<string[]> => {
       throw new Error("Failed to parse HTML.");
     }
 
-    const lines: string[] = Array.from(document.getElementsByTagName("a")).map(
-      (atag) => {
-        const s = atag.getAttribute("title") ?? "";
-        if (s != "") {
-          return s;
-        }
-        return atag.innerText.trim() ?? "";
-      },
-    ).filter((s) => {
+    let candidates: string[] = [];
+    if (
+      url.indexOf("/okayama/about/") != -1 ||
+      url.indexOf("/matsue/about/") != -1
+    ) {
+      candidates = Array.from(document.querySelectorAll("tr > td:nth-child(1)"))
+        .map(
+          (el) => {
+            return el.innerText.replace(/地図.+$/g, "");
+          },
+        );
+    } else {
+      candidates = Array.from(document.getElementsByTagName("a")).map(
+        (atag) => {
+          const s = atag.getAttribute("title") ?? "";
+          if (s !== "") {
+            return s;
+          }
+          return atag.innerText.trim() ?? "";
+        },
+      );
+    }
+
+    const lines = candidates.filter((s) => {
       return s.endsWith("裁判所") || s.endsWith("支部");
     }).filter((s) => {
       return s.indexOf("内の") == -1 && s.indexOf("/") == -1;
     }).map((s) => {
-      return s.replace(/支部/g, "支部\n").replace(/出張所/g, "出張所\n")
-        .replace(/・/g, "\n").split("\n")
+      return s.replace(/(支部|出張所|・)/g, "$1\n").split("\n")
         .map((line) => {
           return line.trim();
         })
@@ -117,6 +131,10 @@ const scrapePages = async (
   const results: ScrapeResult[] = [];
 
   for (let i = 0; i < urls.length; i++) {
+    console.log(
+      `[${String(i + 1).padStart(2)}/${String(urls.length).padStart(2)}]`,
+    );
+
     const url = urls[i];
     try {
       const result = await scrapePage(url);
@@ -130,11 +148,6 @@ const scrapePages = async (
     }
 
     if (i < urls.length - 1) {
-      console.log(
-        `[${String(i + 1).padStart(3)}/${
-          String(urls.length).padStart(3)
-        }] 次のリクエストまで ${delayMs}ms 待機中...`,
-      );
       await sleep(delayMs);
     }
   }
