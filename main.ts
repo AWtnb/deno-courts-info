@@ -11,40 +11,43 @@ const sleep = (ms: number): Promise<void> => {
 /**
  * 文字列内の裁判所名を抽出し配列として返す
  *
- * 「裁判所」という文字列が現れるたびに、そこまでを1つの裁判所名として切り出す
- * 地方裁判所、家庭裁判所、簡易裁判所などの順序や組み合わせは不問
+ * 「裁判所」という文字列が現れるたびに切り出し処理を行う
  *
  * @param text - 裁判所名を含む文字列
  * @returns 抽出された裁判所名の配列
- *
- * @example
- * ```
- * const result = splitCourts('釧路地方裁判所釧路家庭裁判所釧路簡易裁判所');
- * // ['釧路地方裁判所', '釧路家庭裁判所', '釧路簡易裁判所']
- * ```
  */
 const splitCourts = (text: string): string[] => {
-  const results: string[] = [];
-  let currentIndex = 0;
+  const found: string[] = [];
+  let startPos = 0;
 
-  while (0 <= currentIndex && currentIndex < text.length) {
-    const nextCourtEnd = text.indexOf("裁判所", currentIndex);
+  while (startPos < text.length) {
+    // 現在位置から「裁判所」を探す
+    const courtEndPos = text.indexOf("裁判所", startPos);
 
-    if (nextCourtEnd === -1) {
+    // 「裁判所」が見つからなければ終了
+    if (courtEndPos === -1) {
       break;
     }
 
-    // 「裁判所」を含めた文字列を取得
-    const courtName = text.substring(currentIndex, nextCourtEnd + 3);
-    results.push(courtName);
+    // 「裁判所」の末尾位置（「所」の次の文字位置）
+    const endPos = courtEndPos + 3;
 
-    // 次の開始位置を設定
-    currentIndex = nextCourtEnd + 3;
+    // 次の「裁判所」があるか確認
+    const nextCourtPos = text.indexOf("裁判所", endPos);
+
+    if (nextCourtPos !== -1) {
+      // 次の「裁判所」がある場合、現在の「裁判所」までを切り出す
+      found.push(text.substring(startPos, endPos));
+      // 次の開始位置を現在の「裁判所」の末尾に設定
+      startPos = endPos;
+    } else {
+      // 次の「裁判所」がない場合、残りすべてを取得
+      found.push(text.substring(startPos));
+      break;
+    }
   }
-  if (results.length < 2) {
-    return [text];
-  }
-  return results;
+
+  return found;
 };
 
 /**
@@ -86,7 +89,7 @@ const scrapePage = async (url: string): Promise<string[]> => {
     }
 
     const lines = candidates.filter((s) => {
-      return s.endsWith("裁判所") || s.endsWith("支部");
+      return s.endsWith("裁判所") || s.endsWith("支部") || s.endsWith("出張所");
     }).filter((s) => {
       return s.indexOf("内の") == -1 && s.indexOf("/") == -1;
     }).map((s) => {
@@ -220,7 +223,7 @@ const getBaseUrls = async (): Promise<string[]> => {
 
 const main = async () => {
   const urls = await getBaseUrls();
-  const results = await scrapePages(urls, 3000);
+  const results = await scrapePages(urls, 1500);
 
   for (const result of results) {
     const filename = filenameFromURL(result.url);
