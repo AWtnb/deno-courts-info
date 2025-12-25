@@ -41,7 +41,9 @@ const splitCourts = (text: string): string[] => {
     // 次の開始位置を設定
     currentIndex = nextCourtEnd + 3;
   }
-
+  if (results.length < 2) {
+    return [text];
+  }
   return results;
 };
 
@@ -66,6 +68,10 @@ const scrapePage = async (url: string): Promise<string[]> => {
 
     const lines: string[] = Array.from(document.getElementsByTagName("a")).map(
       (atag) => {
+        const s = atag.getAttribute("title") ?? "";
+        if (s != "") {
+          return s;
+        }
         return atag.innerText.trim() ?? "";
       },
     ).filter((s) => {
@@ -83,7 +89,9 @@ const scrapePage = async (url: string): Promise<string[]> => {
         });
     }).flat().map((s) => {
       return splitCourts(s);
-    }).flat();
+    }).flat().map((s) => {
+      return s.trim().replace(/[，．･・]|\s/g, "");
+    });
     const uniq = new Set(lines);
     const sorted = [...uniq].sort();
     return [...sorted].sort((a, b) => a.length - b.length);
