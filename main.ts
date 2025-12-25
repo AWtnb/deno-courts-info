@@ -80,10 +80,6 @@ const scrapePage = async (url: string): Promise<string[]> => {
     } else {
       candidates = Array.from(document.getElementsByTagName("a")).map(
         (atag) => {
-          const s = atag.getAttribute("title") ?? "";
-          if (s !== "") {
-            return s;
-          }
           return atag.innerText.trim() ?? "";
         },
       );
@@ -214,7 +210,7 @@ const getBaseUrls = async (): Promise<string[]> => {
   }).filter((href) => {
     return href !== null;
   }).filter((href) => {
-    return href.indexOf("syozai/index.html") != -1 ||
+    return href.indexOf("syozai") != -1 ||
       href.indexOf("ip/info/access/index.html") != -1;
   }).map((href) => {
     return href.replace("./../../", "https://www.courts.go.jp/");
@@ -231,7 +227,7 @@ const main = async () => {
     await saveAsFile(result.data, filename);
   }
 
-  const allData = results.flatMap((result) => result.data);
+  const allData = Array.from(new Set(results.flatMap((result) => result.data)));
   if (0 < allData.length) {
     const filename = `all_court_data_${getTimestamp()}.txt`;
     await saveAsFile(allData, filename);
